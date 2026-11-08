@@ -1,0 +1,41 @@
+# ============================================================
+# OliveSmart — Core ML Requirements
+# Python 3.10+ recommended (tested on 3.13)
+# ============================================================
+
+# --- Data manipulation ---
+numpy>=1.26.0
+pandas>=2.1.0
+scipy>=1.11.0
+
+# --- Machine Learning ---
+scikit-learn>=1.3.0
+xgboost>=2.0.0
+catboost>=1.2.0          # Optional but included
+
+# --- Hyperparameter optimization ---
+optuna>=3.4.0
+optuna-integration>=3.4.0
+
+# --- Visualization ---
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# --- PDF Report generation ---
+fpdf2>=2.7.6
+Pillow>=10.1.0           # Image handling in PDFs
+
+# --- Utilities ---
+tqdm>=4.66.0             # Progress bars
+colorlog>=6.8.0          # Colored terminal logging
+python-dotenv>=1.0.0     # Environment variables
+joblib>=1.3.0            # Parallel processing, model serialization
+psutil>=5.9.0            # System resources monitoring
+
+# --- Data download APIs ---
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# --- Testing ---
+pytest>=7.4.0
+pytest-cov>=4.1.0

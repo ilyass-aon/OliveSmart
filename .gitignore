@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific — do NOT commit raw data files
+data/raw/**/*
+!data/raw/**/.gitkeep
+
+# Processed data can be reproduced — optional to commit
+data/processed/**/*
+!data/processed/**/.gitkeep
+
+# Results are reproducible — do NOT commit to keep repo light
+results/experiments/**/*
+!results/experiments/.gitkeep
+results/models/**/*
+!results/models/.gitkeep
+results/graphs/**/*
+!results/graphs/.gitkeep
+
+# Logs
+logs/**/*
+!logs/.gitkeep
+
+# Reports (PDF generated automatically — optional)
+reports/**/*.pdf
+reports/**/*.csv
+
+# Optuna storage
+*.db
+optuna_*.sqlite3
+
+# TensorFlow / Keras
+*.h5
+*.keras
+*.ckpt
+*.pb
+
+# PyTorch
+*.pt
+*.pth
+
+# Environment variables
+.env
+.env.*
