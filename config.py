@@ -56,7 +56,7 @@ DATASETS = {
         "name": "FAOSTAT — Données Historiques Maroc",
         "raw_path": RAW_DATA_DIR / "faostat",
         "has_yield_target": True,
-        "target_column": "Value",           # Will be detected automatically too
+        "target_column": "Yield_hg_ha",       # Wide format column name
         "target_unit": "hg/ha",             # FAOSTAT uses hectograms per hectare
         "date_column": "Year",
         "enabled": True,
@@ -142,7 +142,7 @@ MODELS = {
         "requires_scaling": True,           # Neural nets need standardization
         "optimizer_type": "optuna",
         "optimizers_to_compare": ["adam", "adamw", "sgd"],
-        "description": "Multilayer Perceptron (TensorFlow/Keras)",
+        "description": "Multilayer Perceptron (PyTorch — Adam/AdamW/SGD compare)",
     },
     "TFT": {
         "enabled": False,                   # Disabled by default (< 1 week deadline)
@@ -190,7 +190,7 @@ SPLITTING = {
     "test_ratio": 0.15,
 
     # Minimum samples required for a valid train/val/test split
-    "min_samples_for_split": 30,
+    "min_samples_for_split": 20,          # FAOSTAT has 32 effective rows after lag
 
     # Random seed for non-temporal splits
     "random_seed": 42,

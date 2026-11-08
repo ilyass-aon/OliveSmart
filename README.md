@@ -1,201 +1,184 @@
-# OliveSmart — Automated ML/DL Framework for Olive Yield Prediction
-# Project: OLV-5 | University Project
+# OliveSmart
 
-## 🫒 Présentation
+Framework Python expérimental pour préparer des données agricoles, explorer
+des indicateurs et, à terme, prédire le rendement des oliveraies au Maroc.
+Le projet OLV-5 combine des données FAOSTAT, NASA POWER, Sentinel-2/NDVI et
+FAO WaPOR.
 
-**OliveSmart** est un framework expérimental Python modulaire conçu pour prédire le **rendement des oliveraies (kg/ha)** à partir de données hétérogènes :
-- Données historiques FAOSTAT
-- Données climatiques NASA POWER
-- Indices de végétation Sentinel-2 (NDVI)
-- Données hydriques FAO WaPOR
+> **État du projet — 8 novembre 2026 :** les phases 1 à 4 sont présentes.
+> L'entraînement ML classique et la comparaison des résultats sont disponibles.
+> Les phases deep learning et les rapports finaux restent à implémenter.
 
----
+## Avancement
 
-## 🗂️ Structure du Projet
+| Phase | État | Ce qui est disponible |
+|---|---|---|
+| 1. Environnement | Implémentée | Vérification des dépendances principales, des données et détection facultative du GPU. |
+| 2. Chargement et EDA | Implémentée | Chargeurs pour les quatre sources, métadonnées des fichiers, analyse exploratoire, graphiques et rapports JSON/CSV. |
+| 3. Prétraitement et découpage | Implémentée, principalement pour FAOSTAT | Préparation de la cible FAOSTAT, exclusion de la production comme prédicteur, ajout d'un retard de rendement, pipelines de prétraitement et partitions chronologiques. |
+| 4. Modèles ML | Implémentée | Baseline, Ridge, Random Forest et XGBoost, validation croisée chronologique, métriques train/validation/test, sauvegarde des modèles et comparaison CSV. |
+| 5. MLP | À faire | La configuration existe, mais pas de boucle d'entraînement raccordée au pipeline. |
+| 6. TFT/LSTM | À faire | Désactivé par défaut; à évaluer seulement si suffisamment de données temporelles sont disponibles. |
+| 7. Évaluation et rapports finaux | Partielle | La phase 4 calcule déjà les métriques et une comparaison CSV; rapports PDF et analyses finales restent à produire. |
+| 8. Pipeline complet | Partiel | Les phases 1 à 4 s'exécutent; les phases 5 à 7 restent à développer. |
 
-```
-OliveSmart/
-├── main.py                    # Point d'entrée — une seule commande
-├── config.py                  # Configuration centrale
-├── requirements.txt           # Dépendances ML
-├── requirements_deep.txt      # Dépendances Deep Learning
-│
-├── data/
-│   ├── raw/                   # ← PLACER VOS DONNÉES ICI
-│   │   ├── faostat/           # CSV exporté depuis fao.org/faostat
-│   │   ├── nasa_power/        # CSV depuis power.larc.nasa.gov
-│   │   ├── sentinel2/         # CSV NDVI extrait manuellement
-│   │   └── wapor/             # CSV depuis FAO WaPOR
-│   └── processed/             # Données transformées (auto-généré)
-│
-├── src/
-│   ├── data/                  # Chargement, EDA, prétraitement, découpage
-│   ├── models/                # Baseline, Ridge, RF, XGBoost, MLP, TFT
-│   ├── optimization/          # GridSearch, RandomSearch, Optuna
-│   ├── experiment_runner.py   # Orchestrateur séquentiel
-│   ├── evaluator.py           # Métriques MAE, RMSE, R²
-│   ├── visualizer.py          # Graphiques automatiques
-│   ├── model_selector.py      # Sélection du meilleur modèle
-│   └── report_generator.py   # Rapports PDF et CSV
-│
-├── results/                   # Résultats des expériences (auto-généré)
-├── reports/                   # Rapports PDF et CSV (auto-généré)
-└── logs/                      # Fichiers de logs horodatés (auto-généré)
-```
+### Données et résultats présents
 
----
+- `data/raw/faostat/` contient les fichiers FAOSTAT large et long. Les résultats
+  EDA chargés dans le dépôt indiquent 33 observations annuelles de 1990 à 2022
+  et une cible `Yield_hg_ha`.
+- `data/raw/nasa_power/` contient des données climatiques annuelles et
+  mensuelles. Sans rendement associé, elles sont actuellement explorées sans
+  apprentissage supervisé.
+- `data/raw/sentinel2/` contient des séries NDVI annuelles et mensuelles.
+- `data/raw/wapor/` contient une série annuelle d'évapotranspiration.
+- Des résultats EDA sont déjà présents pour FAOSTAT et NASA POWER sous
+  `results/experiments/eda/`; les métadonnées de partition FAOSTAT sont dans
+  `results/experiments/splits/`. Des graphiques existent sous
+  `results/graphs/`.
+- Les dossiers `reports/` ne contiennent pas encore de rapports finaux générés.
 
-## 🚀 Installation
+Les données FAOSTAT ne comptent que 33 observations nationales; après création
+d'un retard, le découpage enregistré contient 32 observations (22 entraînement,
+4 validation, 6 test). Les petites partitions rendent toute métrique très
+incertaine. Les données NASA POWER, Sentinel-2 et WaPOR ne sont pas encore
+fusionnées avec le rendement dans un jeu de données supervisé commun.
 
-### 1. Cloner le projet
-```bash
-# Si vous utilisez Git
-git clone <url_du_repo>
-cd olive
-```
+Le téléchargeur prévoit des données de repli dites « représentatives » si
+certaines API échouent. Vérifier la provenance et les valeurs effectivement
+enregistrées avant toute interprétation scientifique ou publication.
 
-### 2. Créer un environnement virtuel (recommandé)
-```bash
+## Fonctionnalités déjà présentes
+
+- Configuration centrale des sources, modèles, partitions et paramètres dans
+  `config.py`.
+- Chargement des CSV FAOSTAT, NASA POWER, Sentinel-2 et WaPOR, avec détection
+  d'encodage, harmonisation de colonnes et métadonnées de chargement.
+- Analyse exploratoire : dimensions, types, valeurs manquantes, doublons,
+  statistiques descriptives, valeurs aberrantes, corrélations, faisabilité
+  supervisée et graphiques.
+- Préparation FAOSTAT : tri chronologique, variables de rendement et d'aire,
+  retard du rendement précédent; `Production_tonnes` est exclue car elle est
+  liée mathématiquement à la cible.
+- Prétraitement scikit-learn : imputation, encodage catégoriel et mise à
+  l'échelle selon le modèle. Les transformations sont ajustées sur
+  l'entraînement puis appliquées à la validation et au test.
+- Partition chronologique train/validation/test, sauvegarde de métadonnées et
+  indices de partition pour reproductibilité.
+- Entraînement des modèles classiques, optimisation par validation croisée
+  chronologique et enregistrement des prédictions/métriques de phase 4.
+- Téléchargement automatisé disponible via `downloaders/download_all.py`.
+- Tests unitaires présents pour l'environnement, les données et le
+  prétraitement (`tests/`).
+
+## À faire
+
+1. Vérifier la provenance et la qualité des données téléchargées, en particulier
+   lorsque le téléchargeur a utilisé des valeurs de repli.
+2. Nettoyer et documenter les données, puis fusionner rendement, climat,
+   télédétection et données hydriques sur des périodes et zones compatibles.
+3. Implémenter et raccorder l'entraînement des modèles configurés
+   deep learning (MLP et, si justifié, TFT/LSTM).
+4. Approfondir l'évaluation statistique et temporelle, avec davantage
+   d'observations et des intervalles d'incertitude pertinents.
+5. Générer les graphiques comparatifs et rapports détaillés; les modèles
+   entraînés et la comparaison CSV sont déjà produits par la phase 4.
+6. Déterminer si la taille et la granularité des données permettent d'entraîner
+   utilement un modèle temporel (TFT/LSTM); le TFT est actuellement désactivé.
+7. Exécuter les tests automatisés et compléter les tests à mesure que les
+   phases suivantes sont développées.
+
+## Installation
+
+Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate      # Windows
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
 
-### 3. Installer les dépendances ML de base
-```bash
-pip install -r requirements.txt
+Les dépendances Deep Learning sont séparées et facultatives pour les phases
+actuelles :
+
+```powershell
+python -m pip install -r requirements_deep.txt
 ```
 
-### 4. Installer les dépendances Deep Learning (optionnel)
-```bash
-# Pour GPU NVIDIA avec CUDA 12.x (recommandé pour RTX 5060 Ti)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements_deep.txt
-```
+Pour CUDA, installer au préalable la version de PyTorch adaptée à la version
+CUDA de la machine en suivant les instructions officielles de PyTorch. Le
+support GPU n'est pas nécessaire pour lancer les phases implémentées.
 
----
+## Utilisation
 
-## 📂 Placement des Données
+```powershell
+# Afficher les datasets et modèles configurés
+python main.py --list
 
-Avant de lancer le pipeline, placez vos fichiers de données dans les bons répertoires :
-
-| Dataset | Répertoire | Format attendu |
-|---------|-----------|----------------|
-| FAOSTAT | `data/raw/faostat/` | CSV exporté depuis faostat.org |
-| NASA POWER | `data/raw/nasa_power/` | CSV depuis power.larc.nasa.gov |
-| Sentinel-2 | `data/raw/sentinel2/` | CSV avec colonnes date + NDVI |
-| FAO WaPOR | `data/raw/wapor/` | CSV avec colonnes date + ET |
-
----
-
-## ▶️ Utilisation
-
-```bash
-# Lancer tout le pipeline (tous les datasets, tous les modèles)
-python main.py
-
-# Vérifier l'environnement uniquement (Phase 1)
+# Vérifier l'environnement
 python main.py --phase 1
 
-# Traiter un seul dataset
-python main.py --dataset FAOSTAT
+# Charger les données et exécuter l'EDA
+python main.py --phase 2
 
-# Tester un seul modèle sur tous les datasets
-python main.py --model Ridge
+# Prétraiter et produire les partitions supervisées disponibles
+python main.py --phase 3
 
-# Combinaison spécifique
-python main.py --dataset FAOSTAT --model XGBoost
+# Entraîner et comparer les modèles ML classiques sur FAOSTAT
+python main.py --phase 4 --dataset FAOSTAT
 
-# Relancer tout depuis zéro (ignorer le cache)
-python main.py --force-rerun
-
-# Simuler sans exécuter
-python main.py --dry-run
-
-# Lister les datasets et modèles disponibles
-python main.py --list
+# Télécharger les sources (nécessite une connexion Internet)
+python downloaders/download_all.py
 ```
 
----
+Les options `--dataset FAOSTAT`, `--model Ridge`, `--force-rerun` et
+`--dry-run` existent dans l'interface CLI. La phase 4 entraîne les modèles
+classiques sélectionnés (`Baseline`, `Ridge`, `RandomForest`, `XGBoost`).
+`--model MLP` et `--model TFT` ne lancent pas encore de modèle. Exécuter
+`python main.py` lance la phase 4 après les phases de données, puis indique que
+les phases 5 à 7 restent à implémenter.
 
-## ⚙️ Configuration
+Les résultats de phase 4 sont enregistrés dans :
 
-Toute la configuration se trouve dans [`config.py`](config.py).
+- `results/models/<dataset>/` : modèle entraîné (`.joblib`) et paramètres (`.json`);
+- `results/experiments/model_results/` : métriques et hyperparamètres par modèle;
+- `results/experiments/predictions/` : valeurs prédites pour validation et test;
+- `results/experiments/phase4_model_comparison.csv` : classement par métrique de validation.
 
-Paramètres principaux modifiables :
-- `DATASETS` : activer/désactiver chaque source de données
-- `MODELS` : activer/désactiver chaque modèle
-- `OPTIMIZATION.optuna_n_trials` : nombre d'essais Optuna
-- `OPTIMIZATION.max_time_per_model_s` : durée max par modèle
-- `SPLITTING` : ratios train/val/test
-- `REPORTING.ranking_metric` : critère de sélection du meilleur modèle
+Les expériences terminées sont réutilisées si les données et les paramètres
+correspondent; `--force-rerun` force leur réentraînement.
 
----
+## Structure actuelle
 
-## 📊 Modèles Implémentés
-
-| Modèle | Bibliothèque | Hyperparamètres optimisés |
-|--------|-------------|--------------------------|
-| Baseline | — | Aucun |
-| Ridge | scikit-learn | alpha, fit_intercept, solver |
-| Random Forest | scikit-learn | n_estimators, max_depth, min_samples_* |
-| XGBoost | xgboost | learning_rate, n_estimators, max_depth, subsample |
-| MLP | TensorFlow/Keras | architecture, learning_rate, dropout, batch_size |
-| TFT/LSTM | PyTorch | learning_rate, hidden_size, dropout (si données suffisantes) |
-
----
-
-## 📋 Contraintes Scientifiques
-
-> ⚠️ Ces règles sont strictement appliquées par le framework :
-
-1. **Pas de fuite de données** : les transformations sont ajustées uniquement sur les données d'entraînement
-2. **Découpage chronologique** : pour les séries temporelles, l'ordre temporel est toujours respecté
-3. **Optimisation sur validation** : le jeu de test n'est jamais utilisé pendant la recherche d'hyperparamètres
-4. **Indépendance des datasets** : chaque dataset est traité séparément
-5. **Reproductibilité** : graine aléatoire fixe dans toutes les opérations stochastiques
-6. **Pas d'invention de résultats** : si un dataset n'a pas de variable cible valide, seule l'analyse exploratoire est réalisée
-
----
-
-## 📁 Sorties Générées
-
-```
-reports/
-├── FAOSTAT/
-│   ├── rapport_FAOSTAT.pdf           # Rapport détaillé
-│   ├── experiments_FAOSTAT.csv       # Toutes les expériences
-│   └── graphs/                        # Graphiques
-├── NASA_POWER/
-│   └── rapport_NASA_POWER.pdf        # Rapport exploratoire
-├── BEST_MODELS_COMPARISON.csv        # Tableau comparatif global
-└── OLIVESMART_GLOBAL_REPORT.pdf      # Rapport complet du projet
+```text
+.
+├── config.py
+├── main.py
+├── downloaders/
+│   └── download_all.py
+├── data/
+│   ├── raw/                 # CSV des quatre sources
+│   └── processed/           # Emplacements prévus pour les données traitées
+├── src/
+│   ├── data/
+│   │   ├── data_loader.py
+│   │   ├── data_explorer.py
+│   │   ├── preprocessing.py
+│   │   └── data_splitter.py
+│   ├── models/
+│   │   ├── base_model.py
+│   │   └── classical_models.py
+│   ├── optimization/
+│   └── logger.py
+├── tests/
+├── results/                 # Modèles, EDA, partitions, prédictions et métriques
+├── reports/                 # Réservé aux rapports finaux à venir
+└── logs/
 ```
 
----
+## Sources de données
 
-## 🔄 Reprise d'Exécution
-
-Si le pipeline est interrompu, relancez simplement :
-```bash
-python main.py
-```
-
-Les expériences déjà terminées sont automatiquement ignorées (fichiers JSON dans `results/experiments/`).
-
-Pour forcer la réexécution de tout :
-```bash
-python main.py --force-rerun
-```
-
----
-
-## 📚 Références
-
-- FAOSTAT : https://www.fao.org/faostat/en/#data/QCL
-- NASA POWER : https://power.larc.nasa.gov/
-- Sentinel-2 (GEE) : https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
-- FAO WaPOR : https://www.fao.org/in-action/remote-sensing-for-water-productivity/
-
----
-
-*Projet universitaire OLV-5 — OliveSmart | Framework développé progressivement en 8 phases*
+- [FAOSTAT — Cultures et élevage](https://www.fao.org/faostat/en/#data/QCL)
+- [NASA POWER](https://power.larc.nasa.gov/)
+- [Sentinel-2 — données Harmonized Sentinel-2 MSI](https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED)
+- [FAO WaPOR](https://www.fao.org/in-action/remote-sensing-for-water-productivity/)
