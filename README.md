@@ -5,9 +5,10 @@ des indicateurs et, à terme, prédire le rendement des oliveraies au Maroc.
 Le projet OLV-5 combine des données FAOSTAT, NASA POWER, Sentinel-2/NDVI et
 FAO WaPOR.
 
-> **État du projet — 8 novembre 2026 :** les phases 1 à 4 sont présentes.
-> L'entraînement ML classique et la comparaison des résultats sont disponibles.
-> Les phases deep learning et les rapports finaux restent à implémenter.
+> **État du projet — 8 novembre 2026 :** les phases 1 à 7 sont raccordées.
+> Les phases deep learning respectent des seuils minimaux de données; avec les
+> 32 observations FAOSTAT actuelles, le MLP est ignoré et le LSTM peut servir
+> de repli au TFT. Ces résultats restent exploratoires.
 
 ## Avancement
 
@@ -17,10 +18,10 @@ FAO WaPOR.
 | 2. Chargement et EDA | Implémentée | Chargeurs pour les quatre sources, métadonnées des fichiers, analyse exploratoire, graphiques et rapports JSON/CSV. |
 | 3. Prétraitement et découpage | Implémentée, principalement pour FAOSTAT | Préparation de la cible FAOSTAT, exclusion de la production comme prédicteur, ajout d'un retard de rendement, pipelines de prétraitement et partitions chronologiques. |
 | 4. Modèles ML | Implémentée | Baseline, Ridge, Random Forest et XGBoost, validation croisée chronologique, métriques train/validation/test, sauvegarde des modèles et comparaison CSV. |
-| 5. MLP | À faire | La configuration existe, mais pas de boucle d'entraînement raccordée au pipeline. |
-| 6. TFT/LSTM | À faire | Désactivé par défaut; à évaluer seulement si suffisamment de données temporelles sont disponibles. |
-| 7. Évaluation et rapports finaux | Partielle | La phase 4 calcule déjà les métriques et une comparaison CSV; rapports PDF et analyses finales restent à produire. |
-| 8. Pipeline complet | Partiel | Les phases 1 à 4 s'exécutent; les phases 5 à 7 restent à développer. |
+| 5. MLP | Implémentée, sous condition de taille | PyTorch, recherche Optuna pour Adam/AdamW/SGD, early stopping sur un holdout chronologique interne au train; ignoré par défaut si moins de 50 observations préparées. |
+| 6. TFT/LSTM | Implémentée en repli LSTM | Séquences LSTM à lookback configurable et recherche Optuna; le TFT lui-même n'est pas implémenté et reste désactivé par défaut. |
+| 7. Évaluation et rapports | Implémentée | Classement par métrique de validation, graphiques des métriques et prédictions test, rapports PDF par dataset et global. |
+| 8. Pipeline complet | Partiel | Les phases 1 à 7 s'exécutent; la fusion multisource et l'implémentation réelle du TFT restent à développer. |
 
 ### Données et résultats présents
 
@@ -67,6 +68,12 @@ enregistrées avant toute interprétation scientifique ou publication.
   indices de partition pour reproductibilité.
 - Entraînement des modèles classiques, optimisation par validation croisée
   chronologique et enregistrement des prédictions/métriques de phase 4.
+- MLP PyTorch entraîné et comparé pour chaque optimiseur configuré lorsque le
+  nombre d'observations atteint le seuil; Optuna ne consulte qu'une portion
+  chronologique interne aux données d'entraînement.
+- Modèle LSTM de repli pour une demande TFT, avec séquences temporelles,
+  prédictions et métriques; le TFT n'est pas prétendu comme implémenté.
+- Comparaison finale, graphiques observé/prédit et rapports PDF phase 7.
 - Téléchargement automatisé disponible via `downloaders/download_all.py`.
 - Tests unitaires présents pour l'environnement, les données et le
   prétraitement (`tests/`).
@@ -76,17 +83,12 @@ enregistrées avant toute interprétation scientifique ou publication.
 1. Vérifier la provenance et la qualité des données téléchargées, en particulier
    lorsque le téléchargeur a utilisé des valeurs de repli.
 2. Nettoyer et documenter les données, puis fusionner rendement, climat,
-   télédétection et données hydriques sur des périodes et zones compatibles.
-3. Implémenter et raccorder l'entraînement des modèles configurés
-   deep learning (MLP et, si justifié, TFT/LSTM).
+   télédétection et données hydriques avec une granularité spatio-temporelle
+   scientifiquement justifiée.
+3. Implémenter le véritable TFT (la phase 6 actuelle utilise le LSTM de repli)
+   et valider sa nécessité au regard de la quantité de données disponible.
 4. Approfondir l'évaluation statistique et temporelle, avec davantage
    d'observations et des intervalles d'incertitude pertinents.
-5. Générer les graphiques comparatifs et rapports détaillés; les modèles
-   entraînés et la comparaison CSV sont déjà produits par la phase 4.
-6. Déterminer si la taille et la granularité des données permettent d'entraîner
-   utilement un modèle temporel (TFT/LSTM); le TFT est actuellement désactivé.
-7. Exécuter les tests automatisés et compléter les tests à mesure que les
-   phases suivantes sont développées.
 
 ## Installation
 
@@ -98,8 +100,8 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-Les dépendances Deep Learning sont séparées et facultatives pour les phases
-actuelles :
+Les dépendances Deep Learning sont facultatives pour les phases 1 à 4; PyTorch
+et Optuna sont nécessaires aux phases 5 et 6 :
 
 ```powershell
 python -m pip install -r requirements_deep.txt
@@ -124,8 +126,17 @@ python main.py --phase 2
 # Prétraiter et produire les partitions supervisées disponibles
 python main.py --phase 3
 
-# Entraîner et comparer les modèles ML classiques sur FAOSTAT
+# Entraîner les modèles ML classiques sur FAOSTAT
 python main.py --phase 4 --dataset FAOSTAT
+
+# Exécuter les phases 4 à 7 et générer les rapports
+python main.py --phase 7 --dataset FAOSTAT
+
+# Tester le MLP (au moins 50 observations préparées)
+python main.py --phase 5 --dataset FAOSTAT --model MLP
+
+# Demander le modèle temporel (LSTM de repli tant que le TFT n'est pas implémenté)
+python main.py --phase 6 --dataset FAOSTAT --model TFT
 
 # Télécharger les sources (nécessite une connexion Internet)
 python downloaders/download_all.py
@@ -134,9 +145,10 @@ python downloaders/download_all.py
 Les options `--dataset FAOSTAT`, `--model Ridge`, `--force-rerun` et
 `--dry-run` existent dans l'interface CLI. La phase 4 entraîne les modèles
 classiques sélectionnés (`Baseline`, `Ridge`, `RandomForest`, `XGBoost`).
-`--model MLP` et `--model TFT` ne lancent pas encore de modèle. Exécuter
-`python main.py` lance la phase 4 après les phases de données, puis indique que
-les phases 5 à 7 restent à implémenter.
+La phase 5 compare les optimiseurs MLP si au moins 50 observations préparées
+sont disponibles. La phase 6 entraîne un LSTM lorsque TFT est demandé et que
+le nombre de séquences est suffisant; aucun TFT n'est actuellement construit.
+La phase 7 produit les comparaisons et rapports des résultats disponibles.
 
 Les résultats de phase 4 sont enregistrés dans :
 
@@ -144,6 +156,10 @@ Les résultats de phase 4 sont enregistrés dans :
 - `results/experiments/model_results/` : métriques et hyperparamètres par modèle;
 - `results/experiments/predictions/` : valeurs prédites pour validation et test;
 - `results/experiments/phase4_model_comparison.csv` : classement par métrique de validation.
+- `reports/BEST_MODELS_COMPARISON.csv` : classement final des résultats terminés;
+- `reports/<dataset>/rapport_<dataset>.pdf` et
+  `reports/OLIVESMART_GLOBAL_REPORT.pdf` : rapports finaux;
+- `results/graphs/<dataset>/PHASE7_*.png` : comparaisons et prédictions test.
 
 Les expériences terminées sont réutilisées si les données et les paramètres
 correspondent; `--force-rerun` force leur réentraînement.
@@ -167,12 +183,15 @@ correspondent; `--force-rerun` force leur réentraînement.
 │   │   └── data_splitter.py
 │   ├── models/
 │   │   ├── base_model.py
-│   │   └── classical_models.py
+│   │   ├── classical_models.py
+│   │   └── deep_models.py
+│   ├── experiment_artifacts.py
+│   ├── reporting.py
 │   ├── optimization/
 │   └── logger.py
 ├── tests/
 ├── results/                 # Modèles, EDA, partitions, prédictions et métriques
-├── reports/                 # Réservé aux rapports finaux à venir
+├── reports/                 # Rapports PDF et comparaisons de la phase 7
 └── logs/
 ```
 

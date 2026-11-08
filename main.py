@@ -283,6 +283,71 @@ def check_environment():
     return all_ok
 
 
+def _deep_model_paths(dataset_key: str, model_name: str):
+    results_dir = config.EXPERIMENTS_DIR / "model_results"
+    result_path = results_dir / f"{dataset_key}_{model_name}.json"
+    model_path = config.MODELS_DIR / dataset_key / f"{model_name}.joblib"
+    prediction_path = (
+        config.EXPERIMENTS_DIR / "predictions"
+        / f"{dataset_key}_{model_name}_predictions.csv"
+    )
+    return result_path, model_path, prediction_path
+
+
+def _record_deep_result(
+    model,
+    split,
+    metrics,
+    X_val,
+    y_val,
+    X_test,
+    y_test,
+    fingerprint,
+    requested_model=None,
+    extra=None,
+):
+    from src.experiment_artifacts import save_model_result
+
+    result_path, _, prediction_path = _deep_model_paths(
+        split.split_meta["dataset_key"], model.name
+    )
+    return save_model_result(
+        model=model,
+        metrics=metrics,
+        X_val=X_val,
+        y_val=y_val,
+        X_test=X_test,
+        y_test=y_test,
+        result_path=result_path,
+        prediction_path=prediction_path,
+        fingerprint=fingerprint,
+        requested_model=requested_model,
+        extra=extra,
+    )
+
+
+def _write_deep_status(
+    dataset_key: str,
+    model_name: str,
+    status: str,
+    reason: str,
+    fingerprint: str,
+    requested_model=None,
+):
+    from src.experiment_artifacts import write_status_result
+
+    result_path, _, _ = _deep_model_paths(dataset_key, model_name)
+    return write_status_result(
+        result_path=result_path,
+        dataset_key=dataset_key,
+        model_name=model_name,
+        status=status,
+        reason=reason,
+        fingerprint=fingerprint,
+        requested_model=requested_model,
+    )
+
+
 def run_pipeline(args: argparse.Namespace):
     """
     Main pipeline entry point.
@@ -384,7 +449,7 @@ def run_pipeline(args: argparse.Namespace):
             return
 
     # ----------------------------------------------------------------
-    # PHASE 3+ (stubs — will be implemented in future phases)
+    # PHASE 3+ — preprocessing, model training and reporting
     # ----------------------------------------------------------------
     if phase >= 3:
         logger.info("=" * 60)
@@ -677,10 +742,334 @@ def run_pipeline(args: argparse.Namespace):
             return
 
     if phase >= 5:
-        logger.warning(
-            "Les phases 5 a 7 (MLP, TFT/LSTM, evaluation finale et rapports) "
-            "ne sont pas encore implementees."
-        )
+        logger.info("=" * 60)
+        logger.info("PHASE 5 : MLP et comparaison des optimiseurs")
+        logger.info("=" * 60)
+
+        if "MLP" in models_to_run:
+            from src.experiment_artifacts import (
+                experiment_fingerprint,
+                load_completed_result,
+            )
+            try:
+                from src.models.deep_models import TorchMLPRegressor
+            except ImportError as exc:
+                TorchMLPRegressor = None
+                torch_dependency_error = str(exc)
+            else:
+                torch_dependency_error = None
+
+            model_config = config.MODELS["MLP"]
+            minimum_observations = model_config["min_observations_required"]
+            for ds_key, prepared in prepared_data.items():
+                split = prepared["split"]
+                for optimizer_name in model_config["optimizers_to_compare"]:
+                    model_name = f"MLP_{optimizer_name}"
+                    fingerprint = experiment_fingerprint(
+                        split,
+                        "MLP",
+                        {
+                            "model": model_config,
+                            "optimizer": optimizer_name,
+                            "mlp": config.MLP_CONFIG,
+                            "optimization": config.OPTIMIZATION,
+                        },
+                    )
+                    result_path, model_path, prediction_path = _deep_model_paths(
+                        ds_key, model_name
+                    )
+                    cached = load_completed_result(
+                        result_path, model_path, prediction_path, fingerprint
+                    )
+                    if cached:
+                        logger.info(f"Résultat MLP réutilisé : {result_path}")
+                        continue
+
+                    if TorchMLPRegressor is None:
+                        reason = (
+                            "PyTorch requis pour la phase MLP mais indisponible : "
+                            f"{torch_dependency_error}"
+                        )
+                        _write_deep_status(
+                            ds_key, model_name, "dependency_missing",
+                            reason, fingerprint,
+                        )
+                        logger.warning(f"{ds_key}/{model_name} : {reason}")
+                        continue
+
+                    if split.split_meta["n_total"] < minimum_observations:
+                        reason = (
+                            f"{split.split_meta['n_total']} observations après "
+                            f"préparation; minimum configuré pour le MLP : "
+                            f"{minimum_observations}. "
+                            "Le MLP est ignoré pour limiter le surapprentissage."
+                        )
+                        logger.warning(f"{ds_key}/{model_name} : {reason}")
+                        _write_deep_status(
+                            ds_key, model_name, "skipped", reason, fingerprint
+                        )
+                        continue
+
+                    try:
+                        logger.info(f">>> Entraînement {ds_key}/{model_name}")
+                        preprocessing_pipeline = prepared[
+                            "preprocessor"
+                        ].build_pipeline("MLP", split.X_train)
+                        model = TorchMLPRegressor(
+                            dataset_key=ds_key,
+                            optimizer_name=optimizer_name,
+                            preprocessing_pipeline=preprocessing_pipeline,
+                            random_seed=config.OPTIMIZATION["random_seed"],
+                        )
+                        model.optimize(
+                            split.X_train,
+                            split.y_train,
+                            n_trials=config.OPTIMIZATION["optuna_n_trials"],
+                        )
+                        model.fit_timed(split.X_train, split.y_train)
+                        metrics = model.evaluate_all_splits(
+                            split.X_train, split.y_train,
+                            split.X_val, split.y_val,
+                            split.X_test, split.y_test,
+                        )
+                        metrics["cv_mae"] = model.best_inner_mae
+                        result = _record_deep_result(
+                            model,
+                            split,
+                            metrics,
+                            split.X_val,
+                            split.y_val,
+                            split.X_test,
+                            split.y_test,
+                            fingerprint,
+                            extra={"optimizer": optimizer_name},
+                        )
+                        logger.info(
+                            f"[OK] MLP sauvegardé : {result['model_path']}"
+                        )
+                    except Exception as exc:
+                        logger.exception(f"[ERR] Échec MLP {ds_key}/{model_name}")
+                        _write_deep_status(
+                            ds_key,
+                            model_name,
+                            "failed",
+                            str(exc),
+                            fingerprint,
+                        )
+        else:
+            logger.info("MLP non sélectionné; phase 5 sans entraînement.")
+
+        if phase == 5:
+            logger.info("\nPhase 5 terminée.")
+            return
+
+    if phase >= 6:
+        logger.info("=" * 60)
+        logger.info("PHASE 6 : Modèle temporel LSTM (repli du TFT)")
+        logger.info("=" * 60)
+
+        if "TFT" in models_to_run:
+            import numpy as np
+
+            from src.experiment_artifacts import (
+                experiment_fingerprint,
+                load_completed_result,
+            )
+            try:
+                from src.models.deep_models import (
+                    TorchLSTMRegressor,
+                    make_sequences,
+                )
+            except ImportError as exc:
+                TorchLSTMRegressor = None
+                make_sequences = None
+                torch_dependency_error = str(exc)
+            else:
+                torch_dependency_error = None
+
+            tft_config = config.MODELS["TFT"]
+            sequence_config = config.SEQUENCE_CONFIG
+            optimizer_names = tft_config.get(
+                "optimizers_to_compare", ["adam"]
+            )
+            lookback = int(sequence_config["lookback"])
+
+            for ds_key, prepared in prepared_data.items():
+                split = prepared["split"]
+                n_observations = split.split_meta["n_total"]
+                if TorchLSTMRegressor is None or make_sequences is None:
+                    fingerprint = experiment_fingerprint(
+                        split, "LSTM", {"config": sequence_config}
+                    )
+                    reason = (
+                        "PyTorch requis pour le LSTM mais indisponible : "
+                        f"{torch_dependency_error}"
+                    )
+                    _write_deep_status(
+                        ds_key,
+                        "LSTM_fallback_adam",
+                        "dependency_missing",
+                        reason,
+                        fingerprint,
+                        requested_model="TFT",
+                    )
+                    logger.warning(f"{ds_key}/TFT : {reason}")
+                    continue
+
+                if n_observations < tft_config["min_observations_required"]:
+                    fallback_reason = (
+                        f"{n_observations} observations disponibles, sous le "
+                        f"minimum TFT ({tft_config['min_observations_required']}); "
+                    )
+                else:
+                    fallback_reason = "Le modèle TFT n'est pas implémenté; "
+                fallback_reason += "utilisation du LSTM configuré comme repli."
+
+                if not tft_config.get("fallback_to_lstm", False):
+                    fingerprint = experiment_fingerprint(
+                        split, "TFT", {"config": tft_config}
+                    )
+                    _write_deep_status(
+                        ds_key,
+                        "TFT",
+                        "skipped",
+                        fallback_reason + " Repli désactivé.",
+                        fingerprint,
+                    )
+                    continue
+
+                if len(split.X_train) < (
+                    lookback + sequence_config["minimum_training_sequences"] - 1
+                ):
+                    fingerprint = experiment_fingerprint(
+                        split, "LSTM", {"config": sequence_config}
+                    )
+                    _write_deep_status(
+                        ds_key,
+                        "LSTM_fallback_adam",
+                        "skipped",
+                        fallback_reason
+                        + " Pas assez de séquences pour entraîner le LSTM.",
+                        fingerprint,
+                        requested_model="TFT",
+                    )
+                    continue
+
+                preprocessor = prepared["preprocessor"]
+                pipeline = preprocessor.build_pipeline("MLP", split.X_train)
+                X_train, X_val, X_test = preprocessor.fit_transform_split(
+                    pipeline,
+                    split.X_train,
+                    split.X_val,
+                    split.X_test,
+                    model_type="LSTM",
+                )
+                preprocessor.save_pipeline_info(
+                    pipeline, "LSTM", split.X_train
+                )
+
+                X_train_seq = make_sequences(X_train, lookback)
+                y_train_seq = split.y_train.to_numpy()[lookback - 1:]
+                context_val = X_train[-(lookback - 1):] if lookback > 1 else None
+                X_val_seq = make_sequences(X_val, lookback, context_val)
+                prior_features = np.concatenate([X_train, X_val], axis=0)
+                context_test = (
+                    prior_features[-(lookback - 1):] if lookback > 1 else None
+                )
+                X_test_seq = make_sequences(X_test, lookback, context_test)
+
+                for optimizer_name in optimizer_names:
+                    model_name = f"LSTM_fallback_{optimizer_name}"
+                    fingerprint = experiment_fingerprint(
+                        split,
+                        "TFT",
+                        {
+                            "tft": tft_config,
+                            "sequence": sequence_config,
+                            "optimizer": optimizer_name,
+                        },
+                    )
+                    result_path, model_path, prediction_path = _deep_model_paths(
+                        ds_key, model_name
+                    )
+                    cached = load_completed_result(
+                        result_path, model_path, prediction_path, fingerprint
+                    )
+                    if cached:
+                        logger.info(f"Résultat LSTM réutilisé : {result_path}")
+                        continue
+
+                    try:
+                        logger.info(
+                            f">>> Entraînement {ds_key}/{model_name} "
+                            f"({fallback_reason})"
+                        )
+                        model = TorchLSTMRegressor(
+                            dataset_key=ds_key,
+                            model_name="LSTM_fallback",
+                            optimizer_name=optimizer_name,
+                            random_seed=config.OPTIMIZATION["random_seed"],
+                        )
+                        model.optimize(
+                            X_train_seq,
+                            y_train_seq,
+                            n_trials=config.OPTIMIZATION["optuna_n_trials"],
+                        )
+                        model.fit_timed(X_train_seq, y_train_seq)
+                        metrics = model.evaluate_all_splits(
+                            X_train_seq, y_train_seq,
+                            X_val_seq, split.y_val.to_numpy(),
+                            X_test_seq, split.y_test.to_numpy(),
+                        )
+                        metrics["cv_mae"] = model.best_inner_mae
+                        result = _record_deep_result(
+                            model,
+                            split,
+                            metrics,
+                            X_val_seq,
+                            split.y_val.to_numpy(),
+                            X_test_seq,
+                            split.y_test.to_numpy(),
+                            fingerprint,
+                            requested_model="TFT",
+                            extra={
+                                "optimizer": optimizer_name,
+                                "trained_model": "LSTM",
+                                "fallback_reason": fallback_reason,
+                                "lookback": lookback,
+                                "n_train_sequences": len(X_train_seq),
+                            },
+                        )
+                        logger.info(
+                            f"[OK] LSTM sauvegardé : {result['model_path']}"
+                        )
+                    except Exception as exc:
+                        logger.exception(
+                            f"[ERR] Échec LSTM {ds_key}/{model_name}"
+                        )
+                        _write_deep_status(
+                            ds_key,
+                            model_name,
+                            "failed",
+                            str(exc),
+                            fingerprint,
+                            requested_model="TFT",
+                        )
+        else:
+            logger.info("TFT/LSTM non sélectionné; phase 6 sans entraînement.")
+
+        if phase == 6:
+            logger.info("\nPhase 6 terminée.")
+            return
+
+    if phase >= 7:
+        logger.info("=" * 60)
+        logger.info("PHASE 7 : Évaluation, graphiques et rapports")
+        logger.info("=" * 60)
+
+        from src.reporting import generate_phase7_reports
+
+        generate_phase7_reports(datasets=list(datasets_to_run))
 
     logger.info("\nPipeline OliveSmart termine.")
 

@@ -8,13 +8,13 @@
 tensorflow>=2.15.0       # Includes Keras 3
 keras>=3.0.0
 
-# --- PyTorch (TFT / LSTM) ---
+# --- PyTorch (MLP / LSTM fallback) ---
 # Install manually for CUDA support:
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 torch>=2.1.0
 torchvision>=0.16.0
 
-# --- PyTorch Forecasting (TFT) ---
+# --- PyTorch Forecasting (reserved for a future TFT implementation) ---
 pytorch-forecasting>=1.0.0
 pytorch-lightning>=2.1.0
 

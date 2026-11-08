@@ -142,6 +142,7 @@ MODELS = {
         "requires_scaling": True,           # Neural nets need standardization
         "optimizer_type": "optuna",
         "optimizers_to_compare": ["adam", "adamw", "sgd"],
+        "min_observations_required": 50,
         "description": "Multilayer Perceptron (PyTorch — Adam/AdamW/SGD compare)",
     },
     "TFT": {
@@ -160,7 +161,7 @@ MODELS = {
 # ============================================================
 
 OPTIMIZATION = {
-    # Maximum number of Optuna trials per model (MLP, TFT)
+    # Maximum number of Optuna trials per model (MLP, LSTM fallback)
     "optuna_n_trials": 30,
 
     # Maximum wall-clock time per model (seconds); None = no limit
@@ -214,6 +215,23 @@ MLP_CONFIG = {
     "early_stopping_patience": 20,
     "early_stopping_monitor": "val_loss",
     "restore_best_weights": True,
+}
+
+# ============================================================
+# SEQUENCE MODEL (LSTM FALLBACK) CONFIGURATION
+# ============================================================
+
+SEQUENCE_CONFIG = {
+    "lookback": 3,
+    "minimum_training_sequences": 12,
+    "hidden_sizes": [16, 32, 64],
+    "n_layers_range": (1, 2),
+    "dropout_range": (0.0, 0.4),
+    "lr_range": (1e-4, 1e-2),
+    "batch_size_choices": [8, 16, 32],
+    "l2_reg_range": (1e-6, 1e-2),
+    "max_epochs": 200,
+    "early_stopping_patience": 15,
 }
 
 # ============================================================
